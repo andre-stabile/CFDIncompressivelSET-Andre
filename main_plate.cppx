@@ -1,0 +1,127 @@
+//------------------------------------------------------------------------------
+//--------------------------Universidade de Sao Paulo---------------------------
+//----------------------Escola de Engenharia de Sao Carlos----------------------
+//----------------Departamento de Engenharia de Estruturas - SET----------------
+//------------------------------Sao Carlos - 2018-------------------------------
+//------------------------------------------------------------------------------
+ 
+///-----------------------------------------------------------------------------
+///-----Software developed for analysis of 2D incompressible flow problems------
+///----in the Arbitrary Lagrangian-Eulerian (ALE) description. The governing----
+///-----equations are approximated by the Finite Element Method with a mixed----
+///-formulation, stabilized finite elements (PSPG, SUPG and LSIC) and quadratic-
+///----------------approximation for both velocity and pressure.----------------
+///-----------------------------------------------------------------------------
+  
+//------------------------------------------------------------------------------
+//---------------------------------Developed by---------------------------------
+//-------Jeferson Wilian Dossa Fernandes and Rodolfo Andre Kuche Sanches--------
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+//------------------------------STARTS MAIN PROGRAM-----------------------------
+//------------------------------------------------------------------------------
+static char help[] = "Solves the Incompressible flow problem";
+
+// C++ standard libraries
+#include <fstream> 
+  
+// Developed Header Files
+#include "src/Fluid.hpp"  
+#include "src/fluidDomain.h"
+
+
+int main(int argc, char **args) {
+ 
+    // Starts main program invoking PETSc
+    PetscInitialize(&argc, &args, (char*)0, help);
+
+    int rank, size; 
+ 
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+  
+    if (rank == 0){
+        std::cout << "2D Incompressible Flows Numerical Analysis" << std::endl;
+        std::cout << "Starting.." << std::endl;
+        std::cout << "Type the input file name:" << std::endl;
+    };
+
+    // Defines the problem dimension
+    const int dimension = 2;
+
+    //Type definition
+    typedef Fluid<dimension>         FluidModel;
+ 
+//  Create problem variables 
+    FluidModel control;  
+
+
+//================================================================================
+//==================================PROBLEM MESH==================================
+//================================================================================
+    Geometry* fluid1 = new Geometry(0);
+    double size1 = 0.03; 
+
+    Point* p000 = fluid1 -> addPoint({-0.5,0.0},size1,false);
+    Point* p001 = fluid1 -> addPoint({ 0.0,0.0},0.001,false);
+    Point* p002 = fluid1 -> addPoint({ 1.0,0.0},0.02,false);
+    Point* p003 = fluid1 -> addPoint({ 1.0,0.5},size1,false);
+    Point* p004 = fluid1 -> addPoint({-0.5,0.5},size1,false);
+
+    Line* l000 = fluid1 -> addLine({p000,p001});
+    Line* l001 = fluid1 -> addLine({p001,p002});
+    Line* l002 = fluid1 -> addLine({p002,p003});
+    Line* l003 = fluid1 -> addLine({p003,p004});
+    Line* l004 = fluid1 -> addLine({p004,p000}); 
+    
+    LineLoop* ll001 = fluid1 -> addLineLoop({ l000, l001, l002, l003, l004 });
+
+    //std::vector<LineLoop*> lin = {ll0, ll1};
+    PlaneSurface* s001 = fluid1 -> addPlaneSurface({ll001});
+
+    fluid1 -> addBoundaryCondition("NEUMANN", l002, {}, {}, "GLOBAL");
+    
+    fluid1 -> addBoundaryCondition("DIRICHLET", l001, {0.0}, {0.0}, "GLOBAL");
+    fluid1 -> addBoundaryCondition("DIRICHLET", l000, {}, {0.0}, "GLOBAL");
+    fluid1 -> addBoundaryCondition("DIRICHLET", l003, {}, {0.0}, "GLOBAL");
+    fluid1 -> addBoundaryCondition("DIRICHLET", l004, {1.0}, {0.0}, "GLOBAL");
+    
+
+    if (rank == 0){
+  
+        FluidDomain* problem = new FluidDomain(fluid1);
+        problem -> addSurfaceMaterial({ s001 }, 1.0, 1.0, 1.0, "PLANE_STRESS");
+        problem -> generateMesh("T6", "DELAUNAY", "cylinder", "", false, true);
+    };
+
+//================================================================================
+//=================================PROBLEM MESH===================================
+//================================================================================
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+
+    control.dataReading(fluid1,"cylinder_data.txt","cylinder.msh","mirror.txt",0);
+
+    //Data reading     
+    //control.dataReading("control.txt","mirror_control.txt");
+            
+    //solveTransientProblem function needs three parameters:  
+    //1- The maximum number of iterations in the Newton-Raphson process
+    //2- The maximum relative error in the Newton-Raphson process (DU)  
+    
+    control.solveTransientProblem(3, 1.e-6); 
+     
+    //Finalize main program   
+    PetscFinalize();
+ 
+    return 0; 
+}
+ 
+ 
+  
+
+
+
+
+ 

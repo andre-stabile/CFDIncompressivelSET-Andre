@@ -1,0 +1,199 @@
+//------------------------------------------------------------------------------
+//--------------------------Universidade de Sao Paulo---------------------------
+//----------------------Escola de Engenharia de Sao Carlos----------------------
+//----------------Departamento de Engenharia de Estruturas - SET----------------
+//------------------------------Sao Carlos - 2018-------------------------------
+//------------------------------------------------------------------------------
+ 
+///-----------------------------------------------------------------------------
+///-----Software developed for analysis of 2D incompressible flow problems------
+///----in the Arbitrary Lagrangian-Eulerian (ALE) description. The governing----
+///-----equations are approximated by the Finite Element Method with a mixed----
+///-formulation, stabilized finite elements (PSPG, SUPG and LSIC) and quadratic-
+///----------------approximation for both velocity and pressure.----------------
+///-----------------------------------------------------------------------------
+  
+//------------------------------------------------------------------------------
+//---------------------------------Developed by---------------------------------
+//-------Jeferson Wilian Dossa Fernandes and Rodolfo Andre Kuche Sanches--------
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+//------------------------------STARTS MAIN PROGRAM-----------------------------
+//------------------------------------------------------------------------------
+static char help[] = "Solves the Incompressible flow problem";
+
+// C++ standard libraries
+#include <fstream> 
+  
+// Developed Header Files
+#include "src/Fluid.hpp"  
+#include "src/fluidDomain.h"
+
+
+int main(int argc, char **args) {
+ 
+    // Starts main program invoking PETSc
+    PetscInitialize(&argc, &args, (char*)0, help);
+
+    int rank, size; 
+ 
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+  
+    if (rank == 0){
+        std::cout << "2D Incompressible Flows Numerical Analysis" << std::endl;
+        std::cout << "Starting.." << std::endl;
+        std::cout << "Type the input file name:" << std::endl;
+    };
+
+    // Defines the problem dimension
+    const int dimension = 2;
+
+    //Type definition
+    typedef Fluid<dimension>         FluidModel;
+ 
+//  Create problem variables 
+    FluidModel control;  
+
+
+//================================================================================
+//==================================PROBLEM MESH==================================
+//================================================================================
+        Geometry* fluid1 = new Geometry(0);
+
+        Point* p0 = fluid1 -> addPoint({ -18.0, -25.0 },1,false);
+        Point* p1 = fluid1 -> addPoint({ 38., -25.0 },1,false);
+        Point* p2 = fluid1 -> addPoint({ 38., 25. },1,false);
+        Point* p3 = fluid1 -> addPoint({ -18.0, 25. },1,false);
+        Point* p4 = fluid1 -> addPoint({ 18., -25.0 },1,false);
+        Point* p5 = fluid1 -> addPoint({ 18., 25. },1,false);
+        Point* p6 = fluid1 -> addPoint({ 0., 0. },1,false);
+        Point* p7 = fluid1 -> addPoint({ 0.3535, 0.3535 },1,false);
+        Point* p8 = fluid1 -> addPoint({ 0.3535,-0.3535 },1,false);
+        Point* p9 = fluid1 -> addPoint({-0.3535, 0.3535 },1,false);        
+        Point* p10 = fluid1 -> addPoint({-0.3535,-0.3535 },1,false);        
+
+        Line* l0 = fluid1 -> addLine({ p0, p4 });
+        Line* l1 = fluid1 -> addLine({ p4, p1 });
+        Line* l2 = fluid1 -> addLine({ p1, p2 });
+        Line* l3 = fluid1 -> addLine({ p2, p5 });
+        Line* l4 = fluid1 -> addLine({ p5, p3 });
+        Line* l5 = fluid1 -> addLine({ p3, p0 });
+        Line* l6 = fluid1 -> addLine({ p5, p4 });
+        Line* l7 = fluid1 -> addLine({ p3, p9 });
+        Line* l8 = fluid1 -> addLine({ p7, p5 });
+        Line* l9 = fluid1 -> addLine({ p4, p8 });
+        Line* l10 = fluid1 -> addLine({ p10, p0 });
+        Line* l11 = fluid1 -> addLine({ p7, p6, p9 });
+        Line* l12 = fluid1 -> addLine({ p9, p6, p10 });
+        Line* l13 = fluid1 -> addLine({ p10, p6, p8 });
+        Line* l14 = fluid1 -> addLine({ p8, p6, p7 });        
+
+        LineLoop* ll0 = fluid1->addLineLoop({ l10, l0, l9, l13 -> operator-() });
+        LineLoop* ll1 = fluid1->addLineLoop({ l7-> operator-(), l5, l10-> operator-(), l12-> operator-() });
+        LineLoop* ll2 = fluid1->addLineLoop({ l8, l4, l7, l11 -> operator-() });
+        LineLoop* ll3 = fluid1->addLineLoop({ l9 -> operator-(), l6 -> operator-(), l8 -> operator-(), l14 -> operator-() });
+        LineLoop* ll4 = fluid1->addLineLoop({ l6, l1, l2,  l3 });
+
+        //std::vector<LineLoop*> lin = {ll0, ll1, ll2, ll3, ll4};// Used for insert a hole in a surface
+        PlaneSurface* s0 = fluid1 -> addPlaneSurface({ll0});
+        PlaneSurface* s1 = fluid1 -> addPlaneSurface({ll1});
+        PlaneSurface* s2 = fluid1 -> addPlaneSurface({ll2});
+        PlaneSurface* s3 = fluid1 -> addPlaneSurface({ll3});
+        PlaneSurface* s4 = fluid1 -> addPlaneSurface({ll4});
+
+        //Transfinite lines
+        int diag = 41; double progd = 1.12;
+        int circ = 31; double progc = 1.0;
+
+        //Diagonals
+        fluid1 -> transfiniteLine({ l7 }, diag, 1/progd);
+        fluid1 -> transfiniteLine({ l8 }, diag, progd);
+        fluid1 -> transfiniteLine({ l9 }, diag, 1/progd);
+        fluid1 -> transfiniteLine({ l10 }, diag, progd);
+
+        //Circles
+        fluid1 -> transfiniteLine({ l11 }, circ, progc);
+        fluid1 -> transfiniteLine({ l12 }, circ, progc);
+        fluid1 -> transfiniteLine({ l13 }, circ, progc);
+        fluid1 -> transfiniteLine({ l14 }, circ, progc);
+        fluid1 -> transfiniteLine({ l0 }, circ, progc);
+        fluid1 -> transfiniteLine({ l4 }, circ, progc);
+        fluid1 -> transfiniteLine({ l5 }, circ, progc);
+        fluid1 -> transfiniteLine({ l6 }, circ, progc);
+
+        //Domain
+        fluid1 -> transfiniteLine({ l2 }, circ, progc);
+        fluid1 -> transfiniteLine({ l1 }, circ, progc);
+        fluid1 -> transfiniteLine({ l3 }, circ, progc);
+
+        //Others
+        // fluid1 -> transfiniteLine({ l0 }, circ, progc);
+        // fluid1 -> transfiniteLine({ l1 }, circ, progc);
+        // fluid1 -> transfiniteLine({ l2 }, circ, progc);
+        // fluid1 -> transfiniteLine({ l3 }, circ, progc);        
+        // fluid1 -> transfiniteLine({ l4 }, circ, progc);
+        // fluid1 -> transfiniteLine({ l5 }, circ, progc);
+        // fluid1 -> transfiniteLine({ l6 }, circ, progc);        
+
+        fluid1->transfiniteSurface({ s0 }, "Alternated", {p0,p4,p8,p10});
+        fluid1->transfiniteSurface({ s1 }, "Alternated", {p0,p10,p9,p3});
+        fluid1->transfiniteSurface({ s2 }, "Alternated", {p3,p9,p7,p5});
+        fluid1->transfiniteSurface({ s3 }, "Alternated", {p4,p5,p7,p8});
+        fluid1->transfiniteSurface({ s4 }, "Alternated", {p4,p1,p2,p5});
+
+        fluid1 -> addBoundaryCondition("MOVING", l11, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("MOVING", l12, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("MOVING", l13, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("MOVING", l14, {}, {}, "GLOBAL");
+
+        fluid1 -> addBoundaryCondition("GEOMETRY", l7, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("GEOMETRY", l8, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("GEOMETRY", l9, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("GEOMETRY", l10, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("GEOMETRY", l6, {}, {}, "GLOBAL");
+
+        fluid1 -> addBoundaryCondition("NEUMANN", l2, {}, {}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("DIRICHLET", l5, {1.0}, {0.0}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("DIRICHLET", l0, {}, {0.0}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("DIRICHLET", l1, {}, {0.0}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("DIRICHLET", l3, {}, {0.0}, "GLOBAL");
+        fluid1 -> addBoundaryCondition("DIRICHLET", l4, {}, {0.0}, "GLOBAL");
+
+    if (rank == 0){
+  
+        FluidDomain* problem = new FluidDomain(fluid1);
+        problem -> generateMesh("T6", "DELAUNAY", "cylinder", "", false, true);
+    };
+
+//================================================================================
+//=================================PROBLEM MESH===================================
+//================================================================================
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+
+    control.dataReading(fluid1,"cylinder_data.txt","cylinder.msh","mirror.txt",0);
+
+    //Data reading     
+    //control.dataReading("control.txt","mirror_control.txt");
+            
+    //solveTransientProblem function needs three parameters:  
+    //1- The maximum number of iterations in the Newton-Raphson process
+    //2- The maximum relative error in the Newton-Raphson process (DU)  
+    
+    control.solveTransientProblem(6, 1.e-6); 
+     
+    //Finalize main program   
+    PetscFinalize();
+ 
+    return 0; 
+}
+ 
+ 
+  
+
+
+
+
+ 
