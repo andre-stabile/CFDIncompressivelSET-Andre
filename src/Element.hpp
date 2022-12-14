@@ -203,7 +203,7 @@ public:
     double getJacobian(){return djac_;};
 
     /// Compute and store the drag and lift forces at the element boundary
-    void computeDragAndLiftForces(const std::vector<double> &x0);
+    void computeDragAndLiftForces();
 
     /// Gets the element pressure drag force
     double getPressureDragForce(){return pressureDragForce;};
@@ -603,7 +603,7 @@ void Element<2>::getVelAndDerivatives() {
 //-------------INTERPOLATES VELOCITY, PRESSURE AND ITS DERIVATIVES--------------
 //------------------------------------------------------------------------------
 template<>
-void Element<2>::computeDragAndLiftForces(const std::vector<double> &x0) {
+void Element<2>::computeDragAndLiftForces() {
     
     ublas::bounded_vector<double, 3> nodesb_; 
     if(sideBoundary_ == 0){
@@ -721,7 +721,7 @@ void Element<2>::computeDragAndLiftForces(const std::vector<double> &x0) {
         load_pressure += delta_load_pressure;
         load_friction += delta_load_friction;
 
-        moment += -delta_load(0) * (y_ - x0[1]) + delta_load(1) * (x_ - x0[0]);
+        moment += -delta_load(0) * (y_) + delta_load(1) * (x_ - 0.248792267683901);
         per += jacb_ * weightB;
         
         index++;
