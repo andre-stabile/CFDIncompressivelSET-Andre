@@ -608,7 +608,7 @@ int main(int argc, char **args) {
 
     MPI_Barrier(PETSC_COMM_WORLD);
 
-    control.dataReading(fluid2,"cylinder_data.txt","cylinder.msh","mirror.txt",0);
+    control.dataReading(fluid2,"cylinder_data.txt","cylinder.msh","mirror.txt",0,"input_structural_parameters.txt");
 
     //Data reading     
     //control.dataReading("control.txt","mirror_control.txt");

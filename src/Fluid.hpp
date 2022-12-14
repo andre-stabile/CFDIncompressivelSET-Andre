@@ -17,6 +17,7 @@
 #include "Element.hpp"
 #include "Boundary.hpp"
 #include "fluidDomain.h"
+#include "StructuralDomain.hpp"
 
 // PETSc libraries
 #include <metis.h>
@@ -74,6 +75,7 @@ private:
     int iTimeStep;
     Geometry* geometry_;
     double pi = M_PI;
+    StructuralDomain structure_;
 
     
 public:
@@ -91,7 +93,7 @@ public:
     /// @param Geometry* mesh geometry @param std::string input file 
     /// @param std::string input .msh file @param std::string mirror file
     /// @param bool delete mesh files
-    void dataReading(Geometry* geometry, const std::string& inputFile, const std::string& inputMesh, const std::string& mirror, const bool& deleteFiles);
+    void dataReading(Geometry* geometry, const std::string& inputFile, const std::string& inputMesh, const std::string& mirror, const bool& deleteFiles, const std::string& structuralInputFile);
 
     void readInitialValues(const std::string& inputVel,const std::string& inputPres);
 
@@ -136,6 +138,12 @@ public:
 
     /// Compute and print drag and lift coefficients
     void dragAndLiftCoefficients(std::ofstream& dragLift);
+
+    /// Computes forces on fluid-structure interface
+    void computeFSIForces(std::vector<double> &F);
+
+    /// Prints the FSI boundary
+    void printFSIBoundary(const int& timestep, std::string output_file);
 };
 
 //------------------------------------------------------------------------------
@@ -261,10 +269,11 @@ void Fluid<2>::printResults(int step) {
         std::fstream output_v(s.c_str(), std::ios_base::out);
 
         if (rank == 0){
+            std::vector<StructuralNode> boundary = structure_.getBoundary();
             output_v << "<?xml version=\"1.0\"?>" << std::endl
                      << "<VTKFile type=\"UnstructuredGrid\">" << std::endl
                      << "  <UnstructuredGrid>" << std::endl
-                     << "  <Piece NumberOfPoints=\"" << numNodes
+                     << "  <Piece NumberOfPoints=\"" << numNodes + boundary.size()
                      << "\"  NumberOfCells=\"" << numTotalElem
                      << "\">" << std::endl;
 
@@ -277,6 +286,11 @@ void Fluid<2>::printResults(int step) {
                 typename Node::VecLocD x;
                 x=nodes_[i]->getCoordinates();
                 output_v << x(0) << " " << x(1) << " " << 0.0 << std::endl;        
+            };
+            for (int i=0; i<boundary.size(); i++){
+                std::vector<double> x;
+                x=boundary[i].getCurrentPositions();
+                output_v << x[0] << " " << x[1] << " " << 0.0 << std::endl;        
             };
             output_v << "      </DataArray>" << std::endl
                      << "    </Points>" << std::endl;
@@ -476,7 +490,7 @@ void Fluid<2>::dragAndLiftCoefficients(std::ofstream& dragLift){
                 
                 for (int j = 0; j < numElem; ++j){
                     if (elements_[j] -> getIndex() == iel){
-                        elements_[j] -> computeDragAndLiftForces();
+                        elements_[j] -> computeDragAndLiftForces(structure_.getCenter().getCurrentPositions());
                     
                         pDForce = elements_[j] -> getPressureDragForce();
                         pLForce = elements_[j] -> getPressureLiftForce();
@@ -548,6 +562,129 @@ void Fluid<2>::dragAndLiftCoefficients(std::ofstream& dragLift){
         dragLift << std::endl;
     }
 }
+//------------------------------------------------------------------------------
+//------------------------COMPUTES FORCES ON FSI INTERFACE----------------------
+//------------------------------------------------------------------------------
+template<>
+void Fluid<2>::computeFSIForces(std::vector<double> &F){
+    double dForce = 0.;
+    double lForce = 0.;
+    double pMom = 0.;
+    
+    for (int jel = 0; jel < numBoundElems; jel++){   
+        for (int i=0; i<numberOfLines; i++){
+            if (boundary_[jel] -> getBoundaryGroup() == dragAndLiftBoundary[i]){
+                //std::cout << "AQUI " << numberOfLines<< " " << i << " " << dragAndLiftBoundary[i] << std::endl;
+                int iel = boundary_[jel] -> getElement();
+                
+                for (int j = 0; j < numElem; ++j){
+                    if (elements_[j] -> getIndex() == iel){
+                        elements_[j] -> computeDragAndLiftForces(structure_.getCenter().getCurrentPositions());
+                    
+                        dForce += elements_[j] -> getDragForce();
+                        lForce += elements_[j] -> getLiftForce();
+                        pMom += elements_[j] -> getPitchingMoment();
+                    }   
+                }
+            };
+        };
+    };
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+
+    double totalDragForce = 0.;
+    double totalLiftForce = 0.;
+    double totalPitchingMoment = 0.;;
+
+    MPI_Allreduce(&dForce,&totalDragForce,1,MPI_DOUBLE,MPI_SUM,PETSC_COMM_WORLD);
+    MPI_Allreduce(&lForce,&totalLiftForce,1,MPI_DOUBLE,MPI_SUM,PETSC_COMM_WORLD);
+    MPI_Allreduce(&pMom,&totalPitchingMoment,1,MPI_DOUBLE,MPI_SUM,PETSC_COMM_WORLD);
+
+    if (rank == 0) {
+        F[0] = totalDragForce;
+        F[1] = totalLiftForce;
+        F[2] = totalPitchingMoment;
+    }
+}
+
+template<>
+void Fluid<2>::printFSIBoundary(const int& timestep, string output_file){
+    
+    if (timestep % printFreq == 0){
+        if (rank == 0){
+            std::stringstream text;
+            text << "Results/Uncoupled/Euler/" << output_file << timestep << ".vtu";
+            std::ofstream file(text.str());
+            file.precision(16);
+
+            //header
+            file << "<?xml version=\"1.0\"?>" << "\n"
+                << "<VTKFile type=\"UnstructuredGrid\">" << "\n"
+                << "  <UnstructuredGrid>" << "\n"
+                << "  <Piece NumberOfPoints=\"" << structure_.getBoundary().size()
+                << "\"  NumberOfCells=\"" << structure_.getBoundary().size()
+                << "\">" << "\n";
+            //nodal coordinates
+            file << "    <Points>" << "\n"
+                << "      <DataArray type=\"Float64\" "
+                << "NumberOfComponents=\"3\" format=\"ascii\">" << "\n";
+            for (StructuralNode n : structure_.getBoundary()){
+                file << n.getCurrentPosition(0) << " " << n.getCurrentPosition(1) << " " << 0.0 << "\n";
+            }
+            file << "      </DataArray>" << "\n"
+                << "    </Points>" << "\n";
+            //element connectivity
+            file << "    <Cells>" << "\n"
+                << "      <DataArray type=\"Int32\" "
+                << "Name=\"connectivity\" format=\"ascii\">" << "\n";
+            for (int i = 1; i <= structure_.getBoundary().size(); i++){
+                file << structure_.getBoundary()[i%structure_.getBoundary().size()].getIndex() << " " << structure_.getBoundary()[i-1].getIndex() << " ";
+                file << "\n";
+            }
+
+            file << "      </DataArray>" << "\n";
+            //offsets
+            file << "      <DataArray type=\"Int32\""
+                << " Name=\"offsets\" format=\"ascii\">" << "\n";
+            int aux = 0;
+            for (StructuralNode n : structure_.getBoundary()){
+                aux += 2;
+                file << aux << "\n";
+            }
+            file << "      </DataArray>" << "\n";
+            //elements type
+            file << "      <DataArray type=\"UInt8\" Name=\"types\" "
+                << "format=\"ascii\">" << "\n";
+
+            for (StructuralNode n : structure_.getBoundary()){
+                file << 3 << "\n";
+            }
+            file << "      </DataArray>" << "\n"
+                << "    </Cells>" << "\n";
+            //nodal results
+            file << "    <PointData>" <<"\n";
+            file << "      <DataArray type=\"Float64\" NumberOfComponents=\"3\" "
+                << "Name=\"Position\" format=\"ascii\">" << "\n";
+
+            for (StructuralNode n: structure_.getBoundary()){
+                std::vector<double> u_ = n.getCurrentPositions();
+                file << u_[0] << " "
+                    << u_[1]  << " " << 0.0 << "\n";
+            }
+            file << "      </DataArray> " << "\n";
+            file << "    </PointData>" << "\n";
+            //elemental results
+            file << "    <CellData>" << "\n";
+
+            file << "    </CellData>" << "\n";
+            //footnote
+            file << "  </Piece>" << "\n"
+                << "  </UnstructuredGrid>" << "\n"
+                << "</VTKFile>" << "\n";
+            file.close();
+        }
+    }
+}
 
 //------------------------------------------------------------------------------
 //----------------------------READS FLUID INPUT FILE----------------------------
@@ -555,7 +692,7 @@ void Fluid<2>::dragAndLiftCoefficients(std::ofstream& dragLift){
 template<>
 void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile, 
                            const std::string& inputMesh, const std::string& mirror,
-                           const bool& deleteFiles){
+                           const bool& deleteFiles, const std::string& structuralInputFile){
 
     MPI_Comm_rank(PETSC_COMM_WORLD, &rank);      
     MPI_Comm_size(PETSC_COMM_WORLD, &size);
@@ -764,6 +901,7 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
     FSinterface = geometry_->getBoundaryCondition("MOVING");
     glue = geometry_->getBoundaryCondition("GEOMETRY");
 
+    std::set<int> FSIBoundaryNodesNumbers; // Set to identify FSI boundary
     for (int i = 0; i < number_elements; i++)
     {
         std::getline(file, line);
@@ -894,6 +1032,9 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
                         constrain[1] = 3;
                         value[1] = c[0];
                     }
+                    FSIBoundaryNodesNumbers.insert(connectB(0));
+                    FSIBoundaryNodesNumbers.insert(connectB(1));
+                    FSIBoundaryNodesNumbers.insert(connectB(2));
                 }
             }        
             Boundaries * bound = new Boundaries(connectB, numBoundElems++, constrain, value, ibound);
@@ -1129,6 +1270,56 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
     file.close();
     if (deleteFiles)
         system((remove2 + inputFile).c_str());
+
+    // Fluid-structure interaction data reading
+    std::ifstream input(structuralInputFile);
+
+    // Center coordinates
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> coords = splitdouble(line, " ");
+    // Center initial velocity
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> vel = splitdouble(line, " ");
+    // Center initial acceleration
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> accel = splitdouble(line, " ");
+
+    Node3DOF center(0,coords,vel,accel);
+    
+    // Identifying nodes from the moving boundary data
+    int nnodes = 0;
+    std::vector<StructuralNode> FSINodes;
+    for(auto nodeNumber: FSIBoundaryNodesNumbers){
+        std::vector<double> coords{nodes_[nodeNumber] -> getCoordinateValue(0), nodes_[nodeNumber] -> getCoordinateValue(1)};
+        FSINodes.push_back(StructuralNode(nnodes, coords));
+        nnodes += 1;
+    }
+
+    // Constraints (1 for true, 0 for false)
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<bool> constraints = splitbool(line, " ");
+    // Springs
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> springs = splitdouble(line, " ");
+    // Masses
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> masses = splitdouble(line, " ");
+    // Dampers
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> dampers = splitdouble(line, " ");
+    // beta, gamma
+    std::getline(input, line);
+    std::getline(input, line);
+    std::vector<double> aux = splitdouble(line, " ");
+
+    structure_ = StructuralDomain(center,FSINodes,constraints,springs,masses,dampers,dTime,aux[0],aux[1]);
 
     return;
 };
@@ -1725,9 +1916,16 @@ int Fluid<2>::solveTransientProblem(int iterNumber, double tolerance) {
         if (computeDragAndLift){
             dragAndLiftCoefficients(dragLift);
         };
+        
+
+        std::vector<double> F(3,0.0);
+        computeFSIForces(F);
+        structure_.updateCenterPosition(F);
+        structure_.updateBoundary();
 
         //Printing results
         printResults(iTimeStep);
+        printFSIBoundary(iTimeStep,"FSI_Boundary_Output");
 
         
     };

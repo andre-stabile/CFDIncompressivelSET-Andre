@@ -1,0 +1,16 @@
+Center coordinates
+0.248792267683901 0.00 0.00
+Center initial velocity
+0.00 0.00 0.00
+Center initial acceleration
+0.00 0.00 0.00
+Constraints (1 for true, 0 for false)
+0 0 0
+Springs
+0.8 2.0 0.11667
+Masses
+0.020264237 0.050660592 0.002955286
+Dampers
+0.0 0.0 0.0
+beta, gamma
+0.25, 0.50
