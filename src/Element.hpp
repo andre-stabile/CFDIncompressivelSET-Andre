@@ -203,7 +203,7 @@ public:
     double getJacobian(){return djac_;};
 
     /// Compute and store the drag and lift forces at the element boundary
-    void computeDragAndLiftForces();
+    void computeDragAndLiftForces(const std::vector<double> &x0);
 
     /// Gets the element pressure drag force
     double getPressureDragForce(){return pressureDragForce;};
@@ -603,7 +603,7 @@ void Element<2>::getVelAndDerivatives() {
 //-------------INTERPOLATES VELOCITY, PRESSURE AND ITS DERIVATIVES--------------
 //------------------------------------------------------------------------------
 template<>
-void Element<2>::computeDragAndLiftForces() {
+void Element<2>::computeDragAndLiftForces(const std::vector<double> &x0) {
     
     ublas::bounded_vector<double, 3> nodesb_; 
     if(sideBoundary_ == 0){
@@ -644,6 +644,9 @@ void Element<2>::computeDragAndLiftForces() {
     ublas::identity_matrix<double>             ident(2);
     ublas::bounded_vector<double,2>            load_friction;
     ublas::bounded_vector<double,2>            load_pressure;
+    ublas::bounded_vector<double,2>            delta_load_pressure;
+    ublas::bounded_vector<double,2>            delta_load_friction;
+    ublas::bounded_vector<double,2>            delta_load;
     
     typename QuadShapeFunction<2>::Coords xsi;
 
@@ -668,15 +671,15 @@ void Element<2>::computeDragAndLiftForces() {
         double weightB = gaussQuad.second(index);
 
         if(sideBoundary_ == 2){
-            xsi(0) = (-xsiB + 1.) / 2.;
+            xsi(0) = (xsiB + 1.) / 2.;
             xsi(1) = 0.;
         };
         if(sideBoundary_ == 1){
-            xsi(1) = (xsiB + 1.) / 2.;
+            xsi(1) = (-xsiB + 1.) / 2.;
             xsi(0) = 0.;
         };
         if(sideBoundary_ == 0){
-            xsi(0) = (xsiB + 1.) / 2.;
+            xsi(0) = (-xsiB + 1.) / 2.;
             xsi(1) = 1. - xsi(0);
         };
 
@@ -712,25 +715,26 @@ void Element<2>::computeDragAndLiftForces() {
         shearStress(1,0) = visc_ * (du_dy + dv_dx);
         shearStress(1,1) = 2. * visc_ * dv_dy;
         
-        load_pressure += -p_ * prod(ident,n_vector) * jacb_ * weightB;
-        load_friction += prod(shearStress,n_vector) * jacb_ * weightB;
+        delta_load_pressure = -p_ * prod(ident,n_vector) * jacb_ * weightB;
+        delta_load_friction = prod(shearStress,n_vector) * jacb_ * weightB;
+        delta_load = delta_load_pressure + delta_load_friction;
+        load_pressure += delta_load_pressure;
+        load_friction += delta_load_friction;
 
-        moment += ((-p_ + shearStress(0,0) + shearStress(1,0)) * y_ 
-                 -(-p_ + shearStress(0,1) + shearStress(1,1)) * (x_ - 0.248792267683901))
-                 * jacb_ * weightB;
+        moment += -delta_load(0) * (y_ - x0[1]) + delta_load(1) * (x_ - x0[0]);
         per += jacb_ * weightB;
         
         index++;
     };
 
     perimeter = per;
-    pitchingMoment = moment;
+    pitchingMoment = -moment;
 
-    pressureDragForce = load_pressure(0);
-    pressureLiftForce = load_pressure(1);
+    pressureDragForce = -load_pressure(0);
+    pressureLiftForce = -load_pressure(1);
     
-    frictionDragForce = load_friction(0);
-    frictionLiftForce = load_friction(1);
+    frictionDragForce = -load_friction(0);
+    frictionLiftForce = -load_friction(1);
 
     dragForce = pressureDragForce + frictionDragForce;
     liftForce = pressureLiftForce + frictionLiftForce;
@@ -1476,4 +1480,3 @@ void Element<2>::getSteadyLaplace(){
 
 
 #endif
-
