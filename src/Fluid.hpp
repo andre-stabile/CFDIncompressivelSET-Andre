@@ -2266,6 +2266,52 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
                 dpNorm += val*val;
                 nodes_[i] -> incrementPressure(p_);
             };
+
+            // Moving boundary
+            if (iTimeStep >= initialStructuralTimeStep_){
+                for (int i = 0; i < numNodes; i++){
+                    typename Node::VecLocD x;
+                    
+                    x = nodes_[i] -> getCoordinates();
+                    nodes_[i] -> setPreviousCoordinates(0,x(0));
+                    nodes_[i] -> setPreviousCoordinates(1,x(1));
+                };
+
+                std::vector<double> F(3,0.0);
+                computeFSIForces(F);
+                if (rank == 0){
+                    std::cout << "FORCES ACTING ON THE STRUCTURE: " << F[0] << " " << F[1] << " " << F[2] << std::endl;
+                }
+
+                structure_.updateCenterPosition(F);
+                if (rank == 0){
+                    std::cout << "STRUCTURE'S CENTER POSITION: " << structure_.getCenter().getCurrentPosition(0) << " " << structure_.getCenter().getCurrentPosition(1) << " " << structure_.getCenter().getCurrentPosition(2) << std::endl; 
+                }
+                structure_.updateBoundary();
+
+                for (int i = 0; i < structure_.getBoundary().size(); i++){
+                    int nodeIndex = structure_.getBoundary()[i].getIndex();
+                    typename Node::VecLocD x;
+                    x(0) = structure_.getBoundary()[i].getCurrentPosition(0);
+                    x(1) = structure_.getBoundary()[i].getCurrentPosition(1);
+                    nodes_[nodeIndex]->setUpdatedCoordinates(x);
+                }
+
+                solveSteadyLaplaceProblem(1, 1.e-6);
+
+                for (int i=0; i< numNodes; i++){
+                    typename Node::VecLocD x,xp;
+                    double u[2];
+                    
+                    x = nodes_[i] -> getCoordinates();
+                    xp = nodes_[i] -> getPreviousCoordinates();
+                    
+                    u[0] = (x(0) - xp(0)) / dTime;
+                    u[1] = (x(1) - xp(1)) / dTime;
+
+                    nodes_[i] -> setMeshVelocity(u);
+                };
+            }
             
             //Computes the solution vector norm
             //ierr = VecNorm(u,NORM_2,&val);CHKERRQ(ierr);
@@ -2336,52 +2382,6 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
                 nodes_[i] -> setVorticity(vort); 
             }
         };
-
-        // Moving boundary
-        if (iTimeStep >= initialStructuralTimeStep_){
-            for (int i = 0; i < numNodes; i++){
-                typename Node::VecLocD x;
-                
-                x = nodes_[i] -> getCoordinates();
-                nodes_[i] -> setPreviousCoordinates(0,x(0));
-                nodes_[i] -> setPreviousCoordinates(1,x(1));
-            };
-
-            std::vector<double> F(3,0.0);
-            computeFSIForces(F);
-            if (rank == 0){
-                std::cout << "FORCES ACTING ON THE STRUCTURE: " << F[0] << " " << F[1] << " " << F[2] << std::endl;
-            }
-
-            structure_.updateCenterPosition(F);
-            if (rank == 0){
-                std::cout << "STRUCTURE'S CENTER POSITION: " << structure_.getCenter().getCurrentPosition(0) << " " << structure_.getCenter().getCurrentPosition(1) << " " << structure_.getCenter().getCurrentPosition(2) << std::endl; 
-            }
-            structure_.updateBoundary();
-
-            for (int i = 0; i < structure_.getBoundary().size(); i++){
-                int nodeIndex = structure_.getBoundary()[i].getIndex();
-                typename Node::VecLocD x;
-                x(0) = structure_.getBoundary()[i].getCurrentPosition(0);
-                x(1) = structure_.getBoundary()[i].getCurrentPosition(1);
-                nodes_[nodeIndex]->setUpdatedCoordinates(x);
-            }
-
-            solveSteadyLaplaceProblem(1, 1.e-6);
-
-            for (int i=0; i< numNodes; i++){
-                typename Node::VecLocD x,xp;
-                double u[2];
-                
-                x = nodes_[i] -> getCoordinates();
-                xp = nodes_[i] -> getPreviousCoordinates();
-                
-                u[0] = (x(0) - xp(0)) / dTime;
-                u[1] = (x(1) - xp(1)) / dTime;
-
-                nodes_[i] -> setMeshVelocity(u);
-            };
-        }
 
         //Printing results
         printResults(iTimeStep);
