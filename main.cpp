@@ -567,19 +567,19 @@ int main(int argc, char **args) {
     PlaneSurface* s1005 = fluid2 -> addPlaneSurface({ll1005});
     PlaneSurface* s1006 = fluid2 -> addPlaneSurface({ll1006});
 
-    fluid2 -> addBoundaryCondition("NEUMANN", l1014, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1015, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1016, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1017, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1005, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1006, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1007, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1008, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1009, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1010, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1011, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1012, {}, {}, "GLOBAL");
-    fluid2 -> addBoundaryCondition("NEUMANN", l1013, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1014, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1015, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1016, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1017, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1005, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1006, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1007, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1008, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1009, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1010, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1011, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1012, {}, {}, "GLOBAL");
+    fluid2 -> addBoundaryCondition("GEOMETRY", l1013, {}, {}, "GLOBAL");
     
 
     fluid2 -> addBoundaryCondition("DIRICHLET", l1018, {}, {0}, "GLOBAL");
@@ -617,7 +617,7 @@ int main(int argc, char **args) {
     //1- The maximum number of iterations in the Newton-Raphson process
     //2- The maximum relative error in the Newton-Raphson process (DU)  
     
-    control.solveTransientProblem(3, 1.e-6); 
+    control.solveTransientProblemMoving(3, 1.e-6); 
      
     //Finalize main program   
     PetscFinalize();

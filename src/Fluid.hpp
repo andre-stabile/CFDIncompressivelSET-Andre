@@ -75,7 +75,11 @@ private:
     int iTimeStep;
     Geometry* geometry_;
     double pi = M_PI;
+
+    // FSI variables
     StructuralDomain structure_;
+    int initialStructuralTimeStep_ = 0;
+    double firstTimeStep_;
 
     
 public:
@@ -269,11 +273,10 @@ void Fluid<2>::printResults(int step) {
         std::fstream output_v(s.c_str(), std::ios_base::out);
 
         if (rank == 0){
-            std::vector<StructuralNode> boundary = structure_.getBoundary();
             output_v << "<?xml version=\"1.0\"?>" << std::endl
                      << "<VTKFile type=\"UnstructuredGrid\">" << std::endl
                      << "  <UnstructuredGrid>" << std::endl
-                     << "  <Piece NumberOfPoints=\"" << numNodes + boundary.size()
+                     << "  <Piece NumberOfPoints=\"" << numNodes
                      << "\"  NumberOfCells=\"" << numTotalElem
                      << "\">" << std::endl;
 
@@ -286,11 +289,6 @@ void Fluid<2>::printResults(int step) {
                 typename Node::VecLocD x;
                 x=nodes_[i]->getCoordinates();
                 output_v << x(0) << " " << x(1) << " " << 0.0 << std::endl;        
-            };
-            for (int i=0; i<boundary.size(); i++){
-                std::vector<double> x;
-                x=boundary[i].getCurrentPositions();
-                output_v << x[0] << " " << x[1] << " " << 0.0 << std::endl;        
             };
             output_v << "      </DataArray>" << std::endl
                      << "    </Points>" << std::endl;
@@ -551,7 +549,11 @@ void Fluid<2>::dragAndLiftCoefficients(std::ofstream& dragLift){
         const int timeWidth = 15;
         const int numWidth = 15;
         dragLift << std::setprecision(5) << std::scientific;
-        dragLift << std::left << std::setw(timeWidth) << iTimeStep * dTime;
+        if (iTimeStep >= initialStructuralTimeStep_){
+            dragLift << std::left << std::setw(timeWidth) << initialStructuralTimeStep_ * firstTimeStep_ + (iTimeStep - initialStructuralTimeStep_) * dTime;
+        } else {
+            dragLift << std::left << std::setw(timeWidth) << iTimeStep * firstTimeStep_;
+        }
         dragLift << std::setw(numWidth) << totalPressureDragCoefficient;
         dragLift << std::setw(numWidth) << totalPressureLiftCoefficient;
         dragLift << std::setw(numWidth) << totalFrictionDragCoefficient;
@@ -600,11 +602,9 @@ void Fluid<2>::computeFSIForces(std::vector<double> &F){
     MPI_Allreduce(&lForce,&totalLiftForce,1,MPI_DOUBLE,MPI_SUM,PETSC_COMM_WORLD);
     MPI_Allreduce(&pMom,&totalPitchingMoment,1,MPI_DOUBLE,MPI_SUM,PETSC_COMM_WORLD);
 
-    if (rank == 0) {
-        F[0] = totalDragForce;
-        F[1] = totalLiftForce;
-        F[2] = totalPitchingMoment;
-    }
+    F[0] = totalDragForce;
+    F[1] = totalLiftForce;
+    F[2] = totalPitchingMoment;
 }
 
 template<>
@@ -751,6 +751,7 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
 
     //Read time step lenght
     inputData >> dTime >> integScheme;
+    firstTimeStep_ = dTime;
 
     mirrorData << "Time Step              = " << dTime << std::endl;
     mirrorData << "Time Integration Scheme= " << integScheme << std::endl;
@@ -1043,7 +1044,6 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
         }   
     }
 
-
     domainDecompositionMETIS(elementsAux_);
 
     if (rank == 0){
@@ -1294,7 +1294,7 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
     std::vector<StructuralNode> FSINodes;
     for(auto nodeNumber: FSIBoundaryNodesNumbers){
         std::vector<double> coords{nodes_[nodeNumber] -> getCoordinateValue(0), nodes_[nodeNumber] -> getCoordinateValue(1)};
-        FSINodes.push_back(StructuralNode(nnodes, coords));
+        FSINodes.push_back(StructuralNode(nodeNumber, coords));
         nnodes += 1;
     }
 
@@ -1318,6 +1318,15 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
     std::getline(input, line);
     std::getline(input, line);
     std::vector<double> aux = splitdouble(line, " ");
+    // Time step at which the structure is allowed to move
+    std::getline(input, line);
+    std::getline(input, line);
+    initialStructuralTimeStep_ = stoi(line);
+    // Time step before the structure moves
+    std::getline(input, line);
+    std::getline(input, line);
+    firstTimeStep_ = stod(line);
+    std::cout << initialStructuralTimeStep_ << " " << firstTimeStep_ << std::endl;
 
     structure_ = StructuralDomain(center,FSINodes,constraints,springs,masses,dampers,dTime,aux[0],aux[1]);
 
@@ -1411,7 +1420,7 @@ int Fluid<2>::solveSteadyLaplaceProblem(int iterNumber, double tolerance) {
         ierr = VecDuplicate(b,&All);CHKERRQ(ierr);
         
         //std::cout << "Istart = " << Istart << " Iend = " << Iend << std::endl;
-        
+
         for (int jel = 0; jel < numElem; jel++){   
             
             //if (part_elem[jel] == rank) {
@@ -1427,7 +1436,7 @@ int Fluid<2>::solveSteadyLaplaceProblem(int iterNumber, double tolerance) {
             connec = elements_[jel] -> getConnectivity();
             Ajac = elements_[jel] -> getJacNRMatrix();
             Rhs = elements_[jel] -> getRhsVector();
-            
+   
             //Disperse local contributions into the global matrix
             //Matrix K and C
             for (int i=0; i<6; i++){
@@ -1466,7 +1475,7 @@ int Fluid<2>::solveSteadyLaplaceProblem(int iterNumber, double tolerance) {
                 //};
             };
         };
-        
+   
         //Assemble matrices and vectors
         ierr = MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
         ierr = MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
@@ -1958,7 +1967,7 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
         dragLift << "Time   Pressure Drag   Pressure Lift " 
                  << "Friction Drag  Friction Lift Drag    Lift " 
                  << std::endl;
-    };    
+    };
 
     // Set element mesh moving parameters
     double vMax = 0., vMin = 1.e10;
@@ -1973,7 +1982,8 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
         elements_[i] -> setMeshMovingParameter(eta);
     };
 
-    iTimeStep = 0.;
+    iTimeStep = 0;
+    double dTimeAux = dTime;
 
     for (iTimeStep = 0; iTimeStep < numTimeSteps; iTimeStep++){
 
@@ -1981,6 +1991,28 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
             elements_[i] -> getParameterSUPG();
         };
 
+        //Start the analysis with first order time integration and then change to the user defined
+        if (integScheme < 1.){
+            double one = 1.;
+            if (iTimeStep == 0){
+                for (int i = 0; i < numElem; i++){
+                    elements_[i] -> setTimeIntegrationScheme(one);
+                    dTime = firstTimeStep_; //passo de tempo inicial
+                    elements_[i] -> setTimeStep(dTime);
+                };
+            };
+            if (iTimeStep == initialStructuralTimeStep_) {
+                for (int i = 0; i < numElem; i++){
+                    elements_[i] -> setTimeIntegrationScheme(integScheme);
+                    dTime = dTimeAux; //passo de tempo permanente
+                    elements_[i] -> setTimeStep(dTime);
+                };
+            };
+        };
+
+        //set different  iterationNumbers 
+        int iterNumber2=iterNumber;
+        if(iTimeStep < 4)iterNumber2 = 10;
         
         if (rank == 0) {std::cout << "------------------------- TIME STEP = "
                                   << iTimeStep << " -------------------------"
@@ -2006,58 +2038,9 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
         };
 
 
-        // Moving boundary
-        for (int i = 0; i < numNodes; i++){
-            typename Node::VecLocD x;
-            
-            x = nodes_[i] -> getCoordinates();
-            nodes_[i] -> setPreviousCoordinates(0,x(0));
-            nodes_[i] -> setPreviousCoordinates(1,x(1));
-        };
-
-        for (int i=0; i < numBoundElems; i++){
-            if (boundary_[i] -> getConstrain(0) == 3){
-                //std::cout << "asasa " << i << std::endl;
-                Boundaries::BoundConnect connectB;
-                connectB = boundary_[i] -> getBoundaryConnectivity();
-                int no1 = connectB(0);
-                int no2 = connectB(1);
-                int no3 = connectB(2);
-                
-                typename Node::VecLocD x;
-                x = nodes_[no1]->getCoordinates();
-                x(1) -= .1 * dTime*0;
-                nodes_[no1] -> setUpdatedCoordinates(x);
-
-                x = nodes_[no2]->getCoordinates();
-                x(1) -= .1 * dTime*0;
-                nodes_[no2] -> setUpdatedCoordinates(x);
-
-                x = nodes_[no3]->getCoordinates();
-                x(1) -= .1 * dTime*0;
-                nodes_[no3] -> setUpdatedCoordinates(x);
-            };
-        };
-
-        solveSteadyLaplaceProblem(1, 1.e-6);
-
-        for (int i=0; i< numNodes; i++){
-            typename Node::VecLocD x,xp;
-            double u[2];
-            
-            x = nodes_[i] -> getCoordinates();
-            xp = nodes_[i] -> getPreviousCoordinates();
-            
-            u[0] = (x(0) - xp(0)) / dTime;
-            u[1] = (x(1) - xp(1)) / dTime;
-
-            nodes_[i] -> setMeshVelocity(u);
-        };
-
-
         double duNorm=100.;
         
-        for (int inewton = 0; inewton < iterNumber; inewton++){
+        for (int inewton = 0; inewton < iterNumber2; inewton++){
             boost::posix_time::ptime t1 =                             
                                boost::posix_time::microsec_clock::local_time();
             
@@ -2078,7 +2061,7 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
             
             for (int jel = 0; jel < numElem; jel++){   
                 
-                if (part_elem[jel] == rank) {
+                //if (part_elem[jel] == rank) {
                     //Compute Element matrix
                     elements_[jel] -> getTransientNavierStokes();
 
@@ -2180,7 +2163,7 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
                                                 ADD_VALUES);
                         };
                     };
-                };
+                //};
             }; //Elements
             
             //Assemble matrices and vectors
@@ -2303,7 +2286,7 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
             ierr = VecDestroy(&All); CHKERRQ(ierr);
             ierr = MatDestroy(&A); CHKERRQ(ierr);
 
-            if (sqrt(duNorm) <= tolerance) {
+            if ((iTimeStep>2)&&(sqrt(duNorm) <= tolerance)) {
                 break;
             };
 
@@ -2348,12 +2331,57 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
 
                 nodes_[i] -> setVorticity(vort); 
             }
-
-
         };
+
+        // Moving boundary
+        if (iTimeStep >= initialStructuralTimeStep_){
+            for (int i = 0; i < numNodes; i++){
+                typename Node::VecLocD x;
+                
+                x = nodes_[i] -> getCoordinates();
+                nodes_[i] -> setPreviousCoordinates(0,x(0));
+                nodes_[i] -> setPreviousCoordinates(1,x(1));
+            };
+
+            std::vector<double> F(3,0.0);
+            computeFSIForces(F);
+            if (rank == 0){
+                std::cout << "FORCES ACTING ON THE STRUCTURE: " << F[0] << " " << F[1] << std::endl;
+            }
+
+            structure_.updateCenterPosition(F);
+            if (rank == 0){
+                std::cout << "STRUCTURE'S CENTER POSITION: " << structure_.getCenter().getCurrentPosition(0) << " " << structure_.getCenter().getCurrentPosition(1) << " " << structure_.getCenter().getCurrentPosition(2) << std::endl; 
+            }
+            structure_.updateBoundary();
+
+            for (int i = 0; i < structure_.getBoundary().size(); i++){
+                int nodeIndex = structure_.getBoundary()[i].getIndex();
+                typename Node::VecLocD x;
+                x(0) = structure_.getBoundary()[i].getCurrentPosition(0);
+                x(1) = structure_.getBoundary()[i].getCurrentPosition(1);
+                nodes_[nodeIndex]->setUpdatedCoordinates(x);
+            }
+
+            solveSteadyLaplaceProblem(1, 1.e-6);
+
+            for (int i=0; i< numNodes; i++){
+                typename Node::VecLocD x,xp;
+                double u[2];
+                
+                x = nodes_[i] -> getCoordinates();
+                xp = nodes_[i] -> getPreviousCoordinates();
+                
+                u[0] = (x(0) - xp(0)) / dTime;
+                u[1] = (x(1) - xp(1)) / dTime;
+
+                nodes_[i] -> setMeshVelocity(u);
+            };
+        }
 
         //Printing results
         printResults(iTimeStep);
+        // printFSIBoundary(iTimeStep,"FSI_Boundary_Output");
         
     };
 
