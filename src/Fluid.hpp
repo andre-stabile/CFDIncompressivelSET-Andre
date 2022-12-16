@@ -1326,7 +1326,6 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
     std::getline(input, line);
     std::getline(input, line);
     firstTimeStep_ = stod(line);
-    std::cout << initialStructuralTimeStep_ << " " << firstTimeStep_ << std::endl;
 
     structure_ = StructuralDomain(center,FSINodes,constraints,springs,masses,dampers,dTime,aux[0],aux[1]);
 
