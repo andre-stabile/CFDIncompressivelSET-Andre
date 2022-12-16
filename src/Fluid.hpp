@@ -1326,7 +1326,6 @@ void Fluid<2>::dataReading(Geometry* geometry, const std::string& inputFile,
     std::getline(input, line);
     std::getline(input, line);
     firstTimeStep_ = stod(line);
-    std::cout << initialStructuralTimeStep_ << " " << firstTimeStep_ << std::endl;
 
     structure_ = StructuralDomain(center,FSINodes,constraints,springs,masses,dampers,dTime,aux[0],aux[1]);
 
@@ -1929,7 +1928,15 @@ int Fluid<2>::solveTransientProblem(int iterNumber, double tolerance) {
 
         std::vector<double> F(3,0.0);
         computeFSIForces(F);
+        if (rank == 0){
+            std::cout << "FORCES ACTING ON THE STRUCTURE: " << F[0] << " " << F[1] << " " << F[2] << std::endl;
+        }
+        computeFSIForces(F);
+        
         structure_.updateCenterPosition(F);
+        if (rank == 0){
+            std::cout << "STRUCTURE'S CENTER POSITION: " << structure_.getCenter().getCurrentPosition(0) << " " << structure_.getCenter().getCurrentPosition(1) << " " << structure_.getCenter().getCurrentPosition(2) << std::endl; 
+        }
         structure_.updateBoundary();
 
         //Printing results
