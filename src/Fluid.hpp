@@ -1928,7 +1928,6 @@ int Fluid<2>::solveTransientProblem(int iterNumber, double tolerance) {
         if (rank == 0){
             std::cout << "FORCES ACTING ON THE STRUCTURE: " << F[0] << " " << F[1] << " " << F[2] << std::endl;
         }
-        computeFSIForces(F);
         
         structure_.updateCenterPosition(F);
         if (rank == 0){
