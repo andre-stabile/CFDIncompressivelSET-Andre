@@ -9,12 +9,12 @@ Constraints (1 for true, 0 for false)
 Springs
 20.0 20.0 1.682768498
 Masses
-0.007915717 0.007915717 0.000660016
+2.026423673 2.026423673 0.168964016
 Dampers
 0.0 0.0 0.0
 beta, gamma (Newmark)
 0.25, 0.50
 First time step at which the structure moves
-400
+1000
 Time step before the structure starts to move
 0.1
