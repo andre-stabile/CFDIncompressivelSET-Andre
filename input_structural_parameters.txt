@@ -12,5 +12,9 @@ Masses
 0.020264237 0.050660592 0.002955286
 Dampers
 0.0 0.0 0.0
-beta, gamma
+beta, gamma (Newmark)
 0.25, 0.50
+First time step at which the structure moves
+300
+Time step before the structure starts to move
+0.1

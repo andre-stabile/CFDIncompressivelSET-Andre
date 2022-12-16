@@ -1,7 +1,7 @@
 --------------------------------------------------------------------------------
 TIME STEPS     PRINTING FREQ
 --------------------------------------------------------------------------------
-1000         10
+1000         1
 
 --------------------------------------------------------------------------------
 UNDISTURBED VELOCITY AND PRESSURE
@@ -33,10 +33,10 @@ COMPUTE DRAG AND LIFT COEFF. (0-No, 1-Yes)   NUMBER OF LINES    LINE NUMBERS
 --------------------------------------------------------------------------------
 PRINT RESULTS (0-No, 1-Yes)
 --------------------------------------------------------------------------------
-0 - VELOCITY
-0 - PRESSURE
+1 - VELOCITY
+1 - PRESSURE
 0 - VORTICITY
-0 - MESH VELOCITY
-0 - MESH DISPLACEMENT
-0 - JACOBIAN
+1 - MESH VELOCITY
+1 - MESH DISPLACEMENT
+1 - JACOBIAN
 0 - PROCESS
