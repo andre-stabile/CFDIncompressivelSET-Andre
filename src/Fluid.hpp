@@ -1605,25 +1605,22 @@ int Fluid<2>::solveTransientProblem(int iterNumber, double tolerance) {
         };
     
         //Start the analysis with first order time integration and then change to the user defined
-        
         if (integScheme < 1.){
-             double one = 1.;
+            double one = 1.;
             if (iTimeStep == 0){
-               
                 for (int i = 0; i < numElem; i++){
                     elements_[i] -> setTimeIntegrationScheme(one);
-                    dTime = dTimeAux;//*10.; //passo de tempo tempor�rio
+                    dTime = firstTimeStep_; //passo de tempo inicial
                     elements_[i] -> setTimeStep(dTime);
                 };
             };
-            if (iTimeStep == 5) {
+            if (iTimeStep == initialStructuralTimeStep_) {
                 for (int i = 0; i < numElem; i++){
                     elements_[i] -> setTimeIntegrationScheme(integScheme);
                     dTime = dTimeAux; //passo de tempo permanente
                     elements_[i] -> setTimeStep(dTime);
                 };
             };
-             
         };
 
         //set different  iterationNumbers 
