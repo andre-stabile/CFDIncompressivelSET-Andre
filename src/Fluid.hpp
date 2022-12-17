@@ -148,6 +148,9 @@ public:
 
     /// Prints the FSI boundary
     void printFSIBoundary(const int& timestep, std::string output_file);
+
+    /// Prints the structure's center displacements
+    void printStructureCenterDisplacements(const int &timeStep, std::ofstream &out);
 };
 
 //------------------------------------------------------------------------------
@@ -683,6 +686,23 @@ void Fluid<2>::printFSIBoundary(const int& timestep, string output_file){
                 << "</VTKFile>" << "\n";
             file.close();
         }
+    }
+}
+
+template<>
+void Fluid<2>::printStructureCenterDisplacements(const int &timeStep, std::ofstream &out){
+    if (rank == 0){
+        out << std::setprecision(8);
+        if (timeStep <= initialStructuralTimeStep_){
+            out << timeStep*firstTimeStep_ << " "; 
+        } else {
+            out << initialStructuralTimeStep_*firstTimeStep_ + (timeStep-initialStructuralTimeStep_)*dTime;
+        }
+
+        out << structure_.getCenter().getCurrentPosition(0) - structure_.getCenter().getInitialPosition(0) << " "
+            << structure_.getCenter().getCurrentPosition(1) - structure_.getCenter().getInitialPosition(1) << " "
+            << structure_.getCenter().getCurrentPosition(2) - structure_.getCenter().getInitialPosition(2) << endl;
+
     }
 }
 
@@ -1586,6 +1606,9 @@ int Fluid<2>::solveTransientProblem(int iterNumber, double tolerance) {
     MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
 
     std::ofstream dragLift;
+    std::ofstream centerDisplacements;
+    dragLift.open("dragLift.dat", std::ofstream::out | std::ofstream::app);
+    centerDisplacements.open("Center_Displacements_Output.txt", std::ofstream::out | std::ofstream::app);
     dragLift.open("dragLift.dat", std::ofstream::out | std::ofstream::app);
     if (rank == 0) {
         dragLift << "Time   Pressure Drag   Pressure Lift " 
@@ -1938,9 +1961,12 @@ int Fluid<2>::solveTransientProblem(int iterNumber, double tolerance) {
         //Printing results
         printResults(iTimeStep);
         printFSIBoundary(iTimeStep,"FSI_Boundary_Output");
-
+        printStructureCenterDisplacements(iTimeStep,centerDisplacements);
         
     };
+
+    centerDisplacements.close();
+    dragLift.close();
     
     return 0;
 };
