@@ -705,8 +705,8 @@ void Fluid<2>::printStructureCenterDisplacements(const int &timeStep, std::ofstr
         out << std::setw(numWidth) << structure_.getCenter().getCurrentPosition(0) - structure_.getCenter().getInitialPosition(0);
         out << std::setw(numWidth) << structure_.getCenter().getCurrentPosition(1) - structure_.getCenter().getInitialPosition(1);
         out << std::setw(numWidth) << structure_.getCenter().getCurrentPosition(2) - structure_.getCenter().getInitialPosition(2) << endl;
-
-    
+    }
+}    
 
 //------------------------------------------------------------------------------
 //----------------------------READS FLUID INPUT FILE----------------------------
