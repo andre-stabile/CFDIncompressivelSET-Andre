@@ -692,16 +692,19 @@ void Fluid<2>::printFSIBoundary(const int& timestep, string output_file){
 template<>
 void Fluid<2>::printStructureCenterDisplacements(const int &timeStep, std::ofstream &out){
     if (rank == 0){
+        const int timeWidth = 15;
+        const int numWidth = 15;
+
         out << std::setprecision(8);
         if (timeStep <= initialStructuralTimeStep_){
-            out << timeStep*firstTimeStep_ << " "; 
+            out << std::left << std::setw(timeWidth) << timeStep*firstTimeStep_ << " "; 
         } else {
-            out << initialStructuralTimeStep_*firstTimeStep_ + (timeStep-initialStructuralTimeStep_)*dTime;
+            out << std::left << std::setw(timeWidth) << initialStructuralTimeStep_*firstTimeStep_ + (timeStep-initialStructuralTimeStep_)*dTime;
         }
 
-        out << structure_.getCenter().getCurrentPosition(0) - structure_.getCenter().getInitialPosition(0) << " "
-            << structure_.getCenter().getCurrentPosition(1) - structure_.getCenter().getInitialPosition(1) << " "
-            << structure_.getCenter().getCurrentPosition(2) - structure_.getCenter().getInitialPosition(2) << endl;
+        out << std::setw(numWidth) << structure_.getCenter().getCurrentPosition(0) - structure_.getCenter().getInitialPosition(0);
+            << std::setw(numWidth) << structure_.getCenter().getCurrentPosition(1) - structure_.getCenter().getInitialPosition(1);
+            << std::setw(numWidth) << structure_.getCenter().getCurrentPosition(2) - structure_.getCenter().getInitialPosition(2) << endl;
 
     }
 }
