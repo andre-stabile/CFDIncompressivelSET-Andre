@@ -1998,7 +1998,6 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
     std::ofstream centerDisplacements;
     dragLift.open("dragLift.dat", std::ofstream::out | std::ofstream::app);
     centerDisplacements.open("Center_Displacements_Output.txt", std::ofstream::out | std::ofstream::app);
-    dragLift.open("dragLift.dat", std::ofstream::out | std::ofstream::app);
     if (rank == 0) {
         dragLift << "Time   Pressure Drag   Pressure Lift " 
                  << "Friction Drag  Friction Lift Drag    Lift " 
