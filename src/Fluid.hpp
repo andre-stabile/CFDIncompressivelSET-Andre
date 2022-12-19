@@ -2302,14 +2302,6 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
 
             // Moving boundary
             if (iTimeStep >= initialStructuralTimeStep_){
-                for (int i = 0; i < numNodes; i++){
-                    typename Node::VecLocD x;
-                    
-                    x = nodes_[i] -> getCoordinates();
-                    nodes_[i] -> setPreviousCoordinates(0,x(0));
-                    nodes_[i] -> setPreviousCoordinates(1,x(1));
-                };
-
                 std::vector<double> F(3,0.0);
                 computeFSIForces(F);
                 if (rank == 0){
@@ -2414,6 +2406,14 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
 
                 nodes_[i] -> setVorticity(vort); 
             }
+        };
+
+        for (int i = 0; i < numNodes; i++){
+            typename Node::VecLocD x;
+            
+            x = nodes_[i] -> getCoordinates();
+            nodes_[i] -> setPreviousCoordinates(0,x(0));
+            nodes_[i] -> setPreviousCoordinates(1,x(1));
         };
 
         //Printing results
