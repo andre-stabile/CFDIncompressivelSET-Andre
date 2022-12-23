@@ -2019,6 +2019,7 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
 
     iTimeStep = 0;
     double dTimeAux = dTime;
+    std::vector<double> previousCenterPosition(3);
 
     for (iTimeStep = 0; iTimeStep < numTimeSteps; iTimeStep++){
 
@@ -2073,7 +2074,9 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
             //Updates velocity
             nodes_[i] -> setPreviousVelocity(u);
         };
-
+        previousCenterPosition[0] = structure_.getCenter().getCurrentPosition(0);
+        previousCenterPosition[1] = structure_.getCenter().getCurrentPosition(1);
+        previousCenterPosition[2] = structure_.getCenter().getCurrentPosition(2);
 
         double duNorm=100.;
         
@@ -2302,6 +2305,10 @@ int Fluid<2>::solveTransientProblemMoving(int iterNumber, double tolerance) {
 
             // Moving boundary
             if (iTimeStep >= initialStructuralTimeStep_){
+                structure_.getCenter().setCurrentPosition(0,previousCenterPosition[0]);
+                structure_.getCenter().setCurrentPosition(1,previousCenterPosition[1]);
+                structure_.getCenter().setCurrentPosition(2,previousCenterPosition[2]);
+                
                 std::vector<double> F(3,0.0);
                 computeFSIForces(F);
                 if (rank == 0){
